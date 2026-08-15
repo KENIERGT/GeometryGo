@@ -85,6 +85,17 @@
   .pista{font-size:12.5px;color:var(--acc2);margin-top:6px;line-height:1.5;
     font-family:ui-monospace,Menlo,Consolas,monospace}
   .medidas{font-size:13px;color:var(--acc2);font-variant-numeric:tabular-nums}
+  .ops{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  .op{background:var(--panel2);border:1.5px solid var(--line);border-radius:12px;padding:13px 10px;
+    font-size:16px;font-variant-numeric:tabular-nums;cursor:pointer;text-align:center;color:var(--txt);
+    font-family:inherit;transition:.12s}
+  .op:active{transform:scale(.97)}
+  .op.sel{border-color:var(--acc);background:#12402e;font-weight:700}
+  .op.mala{border-color:var(--mal);color:#ffb3b3;opacity:.55;text-decoration:line-through;cursor:default}
+  .op.buena{border-color:var(--acc);background:#12402e;color:var(--acc);font-weight:700}
+  .op:disabled{cursor:default}
+  .preg{font-size:14.5px;margin:14px 0 2px;font-weight:600}
+  .vidas{font-size:12.5px;color:var(--muted);margin-top:8px}
   #vista3d{width:100%;aspect-ratio:4/3;border-radius:14px;overflow:hidden;background:#0a1a14;
     border:1px solid var(--line);position:relative}
   .aviso{background:#3a2a12;border:1px solid #6b4d16;color:#ffd98a;border-radius:11px;
@@ -159,7 +170,7 @@
   </div>
   <div class="contenido">
     <div class="caja">
-      <h2 id="rTitulo">¡Figura capturada!</h2>
+      <h2 id="rTitulo">Figura encontrada</h2>
       <div id="vista3d"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:9px">
         <label style="font-size:12.5px;color:var(--acc2);white-space:nowrap">Desarrollo</label>
@@ -170,20 +181,17 @@
         <b style="font-size:19px" id="rNombre">—</b>
         <span class="medidas" id="rMedidas"></span>
       </div>
-      <div class="exito" id="rCaptura">Capturada. Ahora resuélvela para sumar los puntos completos.</div>
+      <div class="aviso" id="rCaptura">Todavía no es tuya: resuelve el reto para coleccionarla.</div>
     </div>
 
     <div class="caja">
-      <h2>Reto</h2>
-      <label class="campo" for="rVol">Volumen en cm³</label>
-      <input type="number" id="rVol" step="0.01" inputmode="decimal" placeholder="escribe el resultado">
-      <div class="pista" id="pVol"></div>
-
-      <label class="campo" for="rAre">Área total en cm²</label>
-      <input type="number" id="rAre" step="0.01" inputmode="decimal" placeholder="escribe el resultado">
-      <div class="pista" id="pAre"></div>
-
-      <button class="btn pri ancho" id="btnComprobar" style="margin-top:14px">Comprobar</button>
+      <h2>Reto para coleccionarla</h2>
+      <div class="preg">¿Cuál es el <b>volumen</b>?</div>
+      <div class="ops" id="opsVol"></div>
+      <div class="preg">¿Cuál es el <b>área total</b>?</div>
+      <div class="ops" id="opsAre"></div>
+      <button class="btn pri ancho" id="btnComprobar" style="margin-top:16px">Comprobar</button>
+      <div class="vidas" id="rVidas"></div>
       <div id="rAviso"></div>
     </div>
   </div>
@@ -204,7 +212,8 @@
    ===================================================================== */
 
 const $ = s => document.querySelector(s);
-const PUNTOS_CAPTURA = 10, PUNTOS = [20, 12, 6, 0];   // según el intento
+const PUNTOS = [30, 18, 8];       // puntos según el intento en que resuelve
+const INTENTOS = 3;               // fallar los tres significa no coleccionarla todavía
 
 /* ---------- 1. cacería y progreso ---------- */
 function cargarCaceria(){
@@ -224,7 +233,7 @@ function hash(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|
 
 let prog = (() => {
   try{ const g = JSON.parse(leer(CLAVE)); if(g && g.figs && g.figs.length === CAZA.figuras.length) return g; }catch(e){}
-  return { figs: CAZA.figuras.map(()=>({capturada:false, vol:false, are:false, intV:0, intA:0})),
+  return { figs: CAZA.figuras.map(()=>({capturada:false, intentos:0, fallidos:0, errores:[]})),
            puntos:0, nombre:'', inicio:Date.now() };
 })();
 function guardarProg(){ guardar(CLAVE, JSON.stringify(prog)); }
@@ -354,17 +363,17 @@ function pintarInicio(){
     d.className = 'item' + (p.capturada ? ' hecha' : '');
     if(!p.capturada){
       const dist = distanciaA(f);
-      d.innerHTML = `<div class="ico">❓</div><div class="txt"><b>Figura ${i+1}</b>
-        <small>${f.pista ? esc(f.pista) : 'sin pista'}${dist!=null ? ' · a ' + Math.round(dist) + ' m' : ''}</small></div>`;
+      d.innerHTML = `<div class="ico">${p.fallidos ? '🔁' : '❓'}</div><div class="txt"><b>Figura ${i+1}</b>
+        <small>${f.pista ? esc(f.pista) : 'sin pista'}${dist!=null ? ' · a ' + Math.round(dist) + ' m' : ''}` +
+        `${p.fallidos ? ' · fallaste ' + p.fallidos + (p.fallidos>1?' veces':' vez') + ', vuelve a escanearla' : ''}</small></div>`;
       pend.appendChild(d);
     }else{
-      const listo = p.vol && p.are;
+      const r = def.calc(dimsFigura(f));
       d.innerHTML = `<div class="ico">${ICONOS[f.cuerpo]||'🔷'}</div>
-        <div class="txt"><b>${esc(def.nombre)}</b><small>${esc(textoMedidas(f))}</small></div>
-        ${listo ? '<span class="insignia">resuelta</span>'
-                : '<button class="btn" style="padding:7px 12px;font-size:12.5px">Resolver</button>'}`;
-      if(!listo) d.querySelector('button').onclick = () => abrirReto(i, false);
-      else d.onclick = () => abrirReto(i, false);
+        <div class="txt"><b>${esc(def.nombre)}</b>
+          <small>${esc(textoMedidas(f))} · V = ${nf(r.vo.v)} cm³</small></div>
+        <span class="insignia">tuya</span>`;
+      d.onclick = () => abrirReto(i);
       alb.appendChild(d);
     }
   });
@@ -375,30 +384,31 @@ function pintarInicio(){
   actualizarRadar();
 }
 const esc = s => String(s||'').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+const nf = v => Number(v).toLocaleString('es-NI', {maximumFractionDigits:2});
 
 function pintarFinal(hechas, total){
-  const resueltas = prog.figs.filter(f=>f.vol && f.are).length;
+  const resueltas = hechas;
   const caja = $('#finCaja');
   if(hechas < total){ caja.innerHTML = ''; $('#qrFin').style.display='none'; return; }
   const min = Math.round((Date.now() - prog.inicio)/60000);
   caja.innerHTML = `<div class="exito" style="margin-top:12px">
-      <b>¡Cacería completa!</b><br>${resueltas} de ${total} figuras resueltas ·
+      <b>¡Cacería completa!</b><br>${total} figuras coleccionadas ·
       ${prog.puntos} puntos · ${min} min</div>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
       <button class="btn sec" id="btnCodigo">Mostrar código para el docente</button>
       <button class="btn" id="btnCSV">Descargar resultados</button></div>`;
   $('#btnCodigo').onclick = () => {
-    const t = `GEOCAZA|${prog.nombre||'sin nombre'}|${CAZA.titulo}|${prog.puntos}|${resueltas}/${total}|${min}min`;
+    const t = `GEOCAZA|${prog.nombre||'sin nombre'}|${CAZA.titulo}|${prog.puntos}|${total}/${total}|${min}min`;
     const q = qrcode(0,'M'); q.addData(t); q.make();
     $('#qrFin').innerHTML = q.createImgTag(4,6) +
       `<div style="color:#000;font-size:11px;text-align:center;margin-top:6px">${esc(prog.nombre||'sin nombre')} · ${prog.puntos} pts</div>`;
     $('#qrFin').style.display = 'block';
   };
   $('#btnCSV').onclick = () => {
-    let t = 'figura,cuerpo,medidas,capturada,volumen_ok,area_ok,intentos_volumen,intentos_area\n';
+    let t = 'figura,cuerpo,medidas,coleccionada,intentos,rondas_falladas,errores_cometidos\n';
     CAZA.figuras.forEach((f,i) => { const p = prog.figs[i];
       t += `${i+1},${CUERPOS[f.cuerpo].nombre},"${textoMedidas(f)}",${p.capturada?'si':'no'},` +
-           `${p.vol?'si':'no'},${p.are?'si':'no'},${p.intV},${p.intA}\n`; });
+           `${p.intentos},${p.fallidos},"${p.errores.join(' | ')}"\n`; });
     t += `\njugador,${prog.nombre||''}\npuntos,${prog.puntos}\nminutos,${min}\n`;
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([t], {type:'text/csv'}));
@@ -408,7 +418,7 @@ function pintarFinal(hechas, total){
 
 $('#btnReiniciar').onclick = () => {
   if(!confirm('¿Borrar tu progreso y empezar de nuevo?')) return;
-  prog = { figs: CAZA.figuras.map(()=>({capturada:false, vol:false, are:false, intV:0, intA:0})),
+  prog = { figs: CAZA.figuras.map(()=>({capturada:false, intentos:0, fallidos:0, errores:[]})),
            puntos:0, nombre:prog.nombre, inicio:Date.now() };
   guardarProg(); pintarInicio();
 };
@@ -462,16 +472,13 @@ function alDetectar(i){
   if(contenido.parent !== raices[i]) raices[i].add(contenido);
 
   if(p.capturada){
-    $('#msjCam').innerHTML = `Ya tenías esta figura<small>${esc(def.nombre)} · ${esc(textoMedidas(f))}</small>`;
-    $('#accionCam').innerHTML = '<button class="btn ancho">Ver el reto</button>';
-    $('#accionCam').firstChild.onclick = () => abrirReto(i, false);
+    $('#msjCam').innerHTML = `Esta ya es tuya<small>${esc(def.nombre)} · ${esc(textoMedidas(f))}</small>`;
+    $('#accionCam').innerHTML = '<button class="btn ancho">Verla en el álbum</button>';
+    $('#accionCam').firstChild.onclick = () => abrirReto(i);
   }else{
-    $('#msjCam').innerHTML = `¡Encontraste una figura!<small>Aparece sobre el marcador</small>`;
-    $('#accionCam').innerHTML = '<button class="btn pri ancho">¡Capturar!</button>';
-    $('#accionCam').firstChild.onclick = () => {
-      p.capturada = true; prog.puntos += PUNTOS_CAPTURA; guardarProg();
-      abrirReto(i, true);
-    };
+    $('#msjCam').innerHTML = `¡Encontraste una figura!<small>${esc(def.nombre)} · resuélvela para coleccionarla</small>`;
+    $('#accionCam').innerHTML = '<button class="btn pri ancho">Resolver el reto</button>';
+    $('#accionCam').firstChild.onclick = () => abrirReto(i);
   }
 }
 function alPerder(){
@@ -482,12 +489,12 @@ function alPerder(){
 }
 
 /* ---------- 8. pantalla de reto ---------- */
-let retoActual = -1;
-function abrirReto(i, reciencapturada){
-  retoActual = i;
-  modo = 'reto';
-  const f = CAZA.figuras[i], p = prog.figs[i], def = CUERPOS[f.cuerpo], dims = dimsFigura(f);
-  const r = def.calc(dims);
+let retoActual = -1, selVol = null, selAre = null, opsVol = [], opsAre = [];
+
+function abrirReto(i){
+  retoActual = i; modo = 'reto';
+  selVol = selAre = null;
+  const f = CAZA.figuras[i], p = prog.figs[i], def = CUERPOS[f.cuerpo];
 
   $('#capaCam').style.display = 'none';
   $('#salirCam').style.display = 'none';
@@ -499,76 +506,104 @@ function abrirReto(i, reciencapturada){
   construirFigura(f);
   raizPC.add(contenido); raizPC.visible = true;
 
-  $('#rTitulo').textContent = reciencapturada ? '¡Figura capturada!' : 'Figura de tu álbum';
+  $('#rTitulo').textContent = p.capturada ? 'Figura de tu álbum' : 'Figura encontrada';
   $('#rNombre').textContent = def.nombre;
   $('#rMedidas').textContent = textoMedidas(f);
-  $('#rCaptura').style.display = reciencapturada ? 'block' : 'none';
-  $('#rCaptura').innerHTML = '+' + PUNTOS_CAPTURA + ' puntos por encontrarla. Ahora resuélvela para sumar el resto.';
-
-  const inV = $('#rVol'), inA = $('#rAre');
-  inV.value = p.vol ? redondea(r.vo.v) : ''; inA.value = p.are ? redondea(r.at.v) : '';
-  inV.disabled = p.vol; inA.disabled = p.are;
-  inV.className = p.vol ? 'ok' : ''; inA.className = p.are ? 'ok' : '';
-  $('#pVol').innerHTML = p.vol ? '✔ correcto' : pistaFormula(r.vo.f);
-  $('#pAre').innerHTML = p.are ? '✔ correcto' : pistaFormula(r.at.f);
-  $('#rAviso').innerHTML = '';
-  $('#btnComprobar').style.display = (p.vol && p.are) ? 'none' : 'block';
   $('#rPuntos').textContent = prog.puntos;
 
+  opsVol = opcionesReto(f, i, 'vol');
+  opsAre = opcionesReto(f, i, 'are');
+  pintarOpciones();
+
+  if(p.capturada){
+    $('#rCaptura').className = 'exito';
+    $('#rCaptura').textContent = 'Ya la coleccionaste. Estas son las respuestas correctas.';
+    $('#btnComprobar').style.display = 'none';
+    $('#rVidas').textContent = '';
+    $('#rAviso').innerHTML = '';
+  }else{
+    $('#rCaptura').className = 'aviso';
+    $('#rCaptura').textContent = 'Todavía no es tuya: elige las dos respuestas correctas para coleccionarla.';
+    $('#btnComprobar').style.display = 'block';
+    $('#btnComprobar').disabled = false;
+    $('#rVidas').textContent = 'Te quedan ' + (INTENTOS - (p.intentos - p.fallidos*INTENTOS)) +
+      ' intentos. Si fallas todos, la figura no se colecciona y tendrás que volver a buscar el marcador.';
+    $('#rAviso').innerHTML = '';
+  }
   ajustarVista3D();
 }
-function redondea(v){ return Math.round(v*100)/100; }
-/* solo la fórmula, sin los valores sustituidos: la sustitución es tarea del alumno */
-function pistaFormula(f){ return 'Fórmula: ' + String(f).split('=')[0] + '= …'; }
 
-$('#rDes').addEventListener('input', e => {
-  tArmado = 1 - e.target.value/100; aplicarPliegue();
-  $('#rDesTxt').textContent = e.target.value == 0 ? 'armado' : (e.target.value == 100 ? 'red plana' : e.target.value + '%');
-});
+function pintarOpciones(){
+  const p = prog.figs[retoActual];
+  const nfm = v => v.toLocaleString('es-NI', {maximumFractionDigits:2});
+  const caja = (cont, ops, sel, uni, onSel) => {
+    cont.innerHTML = '';
+    ops.forEach((o, k) => {
+      const b = document.createElement('button');
+      b.className = 'op' + (sel === k ? ' sel' : '') + (o.descartada ? ' mala' : '') +
+                    (p.capturada && o.correcta ? ' buena' : '');
+      b.textContent = nfm(o.v) + ' ' + uni;
+      b.disabled = !!o.descartada || p.capturada;
+      b.onclick = () => onSel(k);
+      cont.appendChild(b);
+    });
+  };
+  caja($('#opsVol'), opsVol, selVol, 'cm³', k => { selVol = k; pintarOpciones(); });
+  caja($('#opsAre'), opsAre, selAre, 'cm²', k => { selAre = k; pintarOpciones(); });
+}
 
 $('#btnComprobar').onclick = () => {
   const i = retoActual, f = CAZA.figuras[i], p = prog.figs[i];
-  const r = CUERPOS[f.cuerpo].calc(dimsFigura(f));
-  const inV = $('#rVol'), inA = $('#rAre');
-  let msj = [];
+  if(selVol === null || selAre === null){
+    $('#rAviso').innerHTML = '<div class="aviso">Elige una respuesta en las dos preguntas.</div>';
+    return;
+  }
+  const okV = opsVol[selVol].correcta, okA = opsAre[selAre].correcta;
+  p.intentos++;
 
-  if(!p.vol){
-    const v = parseFloat(inV.value.replace(',','.'));
-    if(inV.value === ''){ msj.push('Escribe el volumen.'); }
-    else if(esCorrecta(v, r.vo.v)){
-      p.vol = true; const g = PUNTOS[Math.min(p.intV, 3)]; prog.puntos += g;
-      inV.className = 'ok'; inV.disabled = true; $('#pVol').innerHTML = '✔ correcto  +' + g + ' pts';
-      msj.push('Volumen correcto.');
-    }else{
-      p.intV++; inV.className = 'mal';
-      if(p.intV >= 3){ $('#pVol').innerHTML = 'Respuesta: ' + redondea(r.vo.v).toLocaleString('es-NI') +
-          ' cm³ · ' + r.vo.f; }
-      else $('#pVol').innerHTML = pistaFormula(r.vo.f) + '  ·  intento ' + p.intV + ' de 3';
-      msj.push('El volumen no es correcto.');
-    }
+  if(okV && okA){
+    p.capturada = true;
+    const usados = p.intentos - p.fallidos * INTENTOS;          // intentos de esta ronda
+    const ganados = PUNTOS[Math.min(Math.max(usados - 1, 0), PUNTOS.length - 1)];
+    prog.puntos += ganados;
+    guardarProg();
+    $('#rCaptura').className = 'exito';
+    $('#rCaptura').textContent = 'Ya la coleccionaste. Estas son las respuestas correctas.';
+    $('#rPuntos').textContent = prog.puntos;
+    $('#rVidas').textContent = '';
+    $('#btnComprobar').style.display = 'none';
+    $('#rAviso').innerHTML = '<div class="exito"><b>¡Correcto! La figura es tuya.</b> +' + ganados +
+      ' puntos. Vuelve al mapa y busca la siguiente.</div>';
+    pintarOpciones();
+    return;
   }
-  if(!p.are){
-    const a = parseFloat(inA.value.replace(',','.'));
-    if(inA.value === ''){ msj.push('Escribe el área total.'); }
-    else if(esCorrecta(a, r.at.v)){
-      p.are = true; const g = PUNTOS[Math.min(p.intA, 3)]; prog.puntos += g;
-      inA.className = 'ok'; inA.disabled = true; $('#pAre').innerHTML = '✔ correcto  +' + g + ' pts';
-      msj.push('Área correcta.');
-    }else{
-      p.intA++; inA.className = 'mal';
-      if(p.intA >= 3){ $('#pAre').innerHTML = 'Respuesta: ' + redondea(r.at.v).toLocaleString('es-NI') +
-          ' cm² · ' + r.at.f; }
-      else $('#pAre').innerHTML = pistaFormula(r.at.f) + '  ·  intento ' + p.intA + ' de 3';
-      msj.push('El área no es correcta.');
-    }
-  }
+
+  // registrar qué error cometió: sirve al docente para el diagnóstico
+  if(!okV && opsVol[selVol].e){ p.errores.push('volumen: ' + opsVol[selVol].e); opsVol[selVol].descartada = true; }
+  if(!okA && opsAre[selAre].e){ p.errores.push('área: ' + opsAre[selAre].e); opsAre[selAre].descartada = true; }
+  if(!okV) selVol = null;
+  if(!okA) selAre = null;
+
+  const usados = p.intentos - p.fallidos * INTENTOS;
+  const quedan = INTENTOS - usados;
   guardarProg();
-  $('#rPuntos').textContent = prog.puntos;
-  const listo = p.vol && p.are;
-  $('#rAviso').innerHTML = listo
-    ? '<div class="exito"><b>¡Figura resuelta!</b> Vuelve al mapa y busca la siguiente.</div>'
-    : '<div class="aviso">' + msj.join(' ') + '</div>';
-  if(listo){ $('#btnComprobar').style.display = 'none'; }
+  pintarOpciones();
+
+  if(quedan <= 0){
+    p.fallidos++; guardarProg();
+    $('#btnComprobar').disabled = true;
+    $('#rVidas').textContent = '';
+    $('#rAviso').innerHTML = '<div class="aviso"><b>Se acabaron los intentos.</b> Esta figura no se ' +
+      'colecciona todavía. Repasa la fórmula, vuelve a buscar el marcador y prueba de nuevo.</div>' +
+      '<button class="btn ancho" id="btnReintentar" style="margin-top:10px">Volver a buscar</button>';
+    $('#btnReintentar').onclick = irInicio;
+  }else{
+    $('#rVidas').textContent = 'Te queda' + (quedan>1?'n ':' ') + quedan + (quedan>1?' intentos':' intento') + '.';
+    $('#rAviso').innerHTML = '<div class="aviso">' +
+      (!okV && !okA ? 'Las dos respuestas están equivocadas.' :
+       !okV ? 'El volumen no es correcto.' : 'El área total no es correcta.') +
+      ' Las opciones descartadas ya no se pueden elegir. Ayúdate con el desarrollo plano.</div>';
+  }
 };
 
 /* ---------- 9. bucle de render ---------- */
@@ -612,8 +647,12 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
 
 window.__caza = {
   caza: CAZA, prog: () => prog,
-  capturar: (i) => { prog.figs[i].capturada = true; prog.puntos += PUNTOS_CAPTURA; guardarProg(); abrirReto(i,true); },
-  responder: (v,a) => { $('#rVol').value = v; $('#rAre').value = a; $('#btnComprobar').click(); },
+  abrir: (i) => abrirReto(i),
+  opciones: () => ({vol: opsVol.map(o=>({v:o.v, ok:o.correcta, mala:!!o.descartada})),
+                    are: opsAre.map(o=>({v:o.v, ok:o.correcta, mala:!!o.descartada}))}),
+  elegir: (kv, ka) => { selVol = kv; selAre = ka; pintarOpciones(); },
+  elegirCorrectas: () => { selVol = opsVol.findIndex(o=>o.correcta); selAre = opsAre.findIndex(o=>o.correcta); pintarOpciones(); },
+  comprobar: () => $('#btnComprobar').click(),
   inicio: irInicio, gps: (lat,lon,prec) => { posGps = {lat,lon,prec:prec||5}; pintarInicio(); }
 };
 </script>

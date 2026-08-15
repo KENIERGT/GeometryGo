@@ -8,7 +8,7 @@ Son **dos aplicaciones**:
 
 | Archivo | Para quién | Qué hace |
 |---|---|---|
-| `docente.html` | docente | define las figuras y sus medidas, imprime los marcadores, fija las ubicaciones y genera el QR |
+| `docente.html` | docente | crea las figuras con las medidas que quiera y las previsualiza en 3D, imprime los marcadores, fija las ubicaciones y genera el QR |
 | `index.html` | estudiante | el juego: radar, cámara, captura, álbum y retos |
 
 ## Por qué marcadores y no solo GPS
@@ -23,8 +23,12 @@ aire libre. Así el mismo juego sirve en el aula, en el patio y en toda la escue
 En `docente.html`:
 
 1. Pone nombre a la cacería y pega la dirección donde publicó el juego.
-2. Agrega hasta **12 figuras**, eligiendo el cuerpo y **escribiendo las medidas que quiera**.
-   A la derecha ve el volumen y el área que tendrá que calcular el estudiante.
+2. Agrega hasta **12 figuras**, eligiendo el cuerpo y **escribiendo las medidas que quiera**
+   (admite decimales, de 0,1 a 500 cm). A la derecha ve el volumen y el área que tendrá que
+   calcular el estudiante.
+   El botón **Ver figura** abre la figura en 3D, con un control para desplegarla en su red plana
+   y las tres fórmulas ya sustituidas: así el docente comprueba que la figura quedó como quería
+   antes de imprimirla.
 3. Para cada figura:
    - **Bajo techo:** deja la ubicación vacía y escribe una pista ("detrás de la pizarra").
    - **Al aire libre:** enciende el GPS, camina hasta el escondite y pulsa **Fijar aquí**.
@@ -39,15 +43,25 @@ y sigue funcionando sin internet.
 
 - La pantalla principal muestra el progreso, el puntaje, el radar y la lista de pistas.
 - **Buscar con la cámara** abre la cámara. Al enfocar un marcador escondido aparece la figura en 3D
-  sobre el papel y el botón **¡Capturar!**.
-- Al capturarla pasan al reto: la figura gira en pantalla, con un control para desplegarla en su
-  **red plana** (ayuda a razonar el área), y dos casillas: volumen y área total.
-- **Puntaje:** 10 puntos por encontrarla; 20, 12 o 6 puntos por acertar cada cálculo según el intento.
-  Al tercer fallo la app muestra la respuesta y la fórmula desarrollada.
-- Al completarla todas: resumen con puntaje y tiempo, un **código QR para mostrarle al docente**
+  sobre el papel: encontrarla **no basta**.
+- Para coleccionarla hay que resolver el reto: la figura gira en pantalla, con un control para
+  desplegarla en su **red plana**, y dos preguntas de opción múltiple —volumen y área total—
+  con cuatro opciones cada una.
+- **Si falla los tres intentos, la figura no se colecciona.** Vuelve a la lista de pendientes
+  marcada como fallida y tiene que buscar otra vez el marcador para reintentarla.
+- **Puntaje:** 30 puntos si acierta al primer intento, 18 al segundo y 8 al tercero.
+- Al completarlas todas: resumen con puntaje y tiempo, un **código QR para mostrarle al docente**
   y descarga de resultados en CSV.
 
-La respuesta se acepta con una tolerancia del 1 %, para que el redondeo razonable no se castigue.
+### Las opciones incorrectas no son al azar
+
+Cada distractor corresponde a un error típico y documentado: confundir el volumen con el área
+total, olvidar dividir entre 3 en el cono y la pirámide, usar el diámetro en lugar del radio,
+usar la altura del cuerpo donde va la apotema o la generatriz, o dejar las bases fuera del área.
+
+La app **registra cuál eligió** el estudiante, así que el CSV no dice solo "falló": dice
+*"volumen: olvida dividir entre 3"*. Eso convierte el juego en un instrumento de diagnóstico,
+y es probablemente el dato más valioso del proyecto para el capítulo de resultados.
 
 ## 3. Publicar
 
@@ -89,8 +103,12 @@ sw.js, manifest.json     funcionamiento sin conexión (PWA)
 
 ## Verificación hecha
 
-- Flujo completo probado: captura, fallo, reintento, acierto y cierre de la cacería.
-  Puntaje correcto (10 de captura + 20 y 20 por acertar al primer intento).
+- Flujo completo probado: figura encontrada, fallo, opciones descartadas, acierto al segundo
+  intento (+18 puntos) y caso de tres fallos, donde la figura **no** se colecciona y vuelve a
+  pendientes marcada para reintentar.
+- Medidas decimales comprobadas de punta a punta: cilindro de r = 3,5 cm y h = 10 cm definido por
+  el docente, transportado en el QR y recibido por el estudiante con V = 384,85 cm³, y los
+  distractores generados correctamente (1 539,38 cm³ = usar el diámetro).
 - Ida y vuelta del QR: el docente fija una coordenada, el estudiante abre el enlace y el radar
   reporta correctamente **22 m** de distancia con la clasificación "muy caliente".
 - Cálculos comprobados contra las fórmulas (pirámide de a = 6 y h = 8: V = 96 cm³, A_T = 138,53 cm²).

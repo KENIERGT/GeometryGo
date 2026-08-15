@@ -37,8 +37,10 @@ Los equipos buscan, capturan y resuelven. El docente circula y observa. Conviene
 - si usan el control de **desarrollo plano** para razonar el área o solo adivinan;
 - cuántos llegan a los tres intentos.
 
-Sugerencia: pedir que el cálculo lo hagan **en el cuaderno antes de escribirlo en la app**.
-La app comprueba; no debe sustituir el procedimiento.
+Regla importante: la figura **solo se colecciona si resuelven bien**. Encontrar el papelito no
+basta. Y como las respuestas son de opción múltiple, conviene exigir que el procedimiento quede
+**escrito en el cuaderno antes de tocar una opción**: si no, algunos van a probar al tanteo.
+Una forma simple de controlarlo es pedir el cuaderno al entregar el puntaje final.
 
 ## Momento 3 — Cierre en el aula (45 min)
 
@@ -57,10 +59,14 @@ cuántos intentos usó. Eso permite calificar el proceso, no solo el resultado:
 
 | Indicador | Evidencia en el CSV |
 |---|---|
-| Aplica la fórmula del volumen | volumen_ok e intentos_volumen |
-| Aplica la fórmula del área total | area_ok e intentos_area |
-| Persistencia ante el error | figuras resueltas después de fallar |
+| Domina volumen y área total | figuras coleccionadas |
 | Autonomía | figuras resueltas al primer intento |
+| Persistencia ante el error | figuras coleccionadas después de una ronda fallida |
+| **Tipo de error conceptual** | columna *errores_cometidos* |
+
+La última columna es la más útil. No dice solo que falló: dice qué entendió mal, por ejemplo
+*"volumen: olvida dividir entre 3"* o *"área: usa la altura del cuerpo en vez de la apotema"*.
+Con eso se puede armar una tabla de frecuencia de errores del grupo y decidir qué repasar.
 
 ## Variantes
 

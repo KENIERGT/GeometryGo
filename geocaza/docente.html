@@ -137,6 +137,25 @@
   </div>
 </main>
 
+<div id="visor" style="display:none;position:fixed;inset:0;z-index:20;background:rgba(4,12,9,.86);
+     align-items:center;justify-content:center;padding:16px">
+  <div class="caja" style="max-width:520px;width:100%;margin:0">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <b id="vNombre" style="font-size:17px">Figura</b>
+      <span class="res" id="vMedidas" style="margin-left:auto"></span>
+    </div>
+    <div id="vLienzo" style="width:100%;aspect-ratio:4/3;background:#08140f;border:1px solid var(--line);
+      border-radius:12px;overflow:hidden"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+      <label style="font-size:12.5px;color:var(--acc2)">Desarrollo</label>
+      <input type="range" id="vDes" min="0" max="100" value="0" style="flex:1;accent-color:var(--acc2)">
+      <output id="vDesTxt" style="font-size:12px;color:var(--muted);width:66px;text-align:right">armado</output>
+    </div>
+    <div class="enlace" id="vDatos" style="margin-top:10px"></div>
+    <div class="barra"><button class="btn pri" id="vCerrar">Cerrar</button></div>
+  </div>
+</div>
+
 <div id="impresion"></div>
 
 <script src="vendor/three.global.js"></script>
@@ -206,6 +225,11 @@ function pintar(){
     res.innerHTML = 'V = ' + nf(r.vo.v) + ' cm³ &nbsp; A<sub>T</sub> = ' + nf(r.at.v) + ' cm²';
     fila1.appendChild(res);
 
+    const ver = document.createElement('button');
+    ver.className = 'btn mini'; ver.textContent = 'Ver figura';
+    ver.onclick = () => abrirVisor(i);
+    fila1.appendChild(ver);
+
     const quitar = document.createElement('button');
     quitar.className = 'btn mini'; quitar.textContent = '✕'; quitar.title = 'Quitar figura';
     quitar.style.marginLeft = 'auto';
@@ -217,8 +241,13 @@ function pintar(){
     def.dims.forEach((dm, k) => {
       const sp = document.createElement('span'); sp.textContent = dm.et;
       const inp = document.createElement('input');
-      inp.type = 'number'; inp.min = 1; inp.max = 60; inp.step = 1; inp.value = f.valores[k];
-      inp.oninput = () => { f.valores[k] = Math.min(60, Math.max(1, Math.round(+inp.value||1))); pintar(); refrescarQR(); };
+      inp.type = 'number'; inp.min = 0.1; inp.max = 500; inp.step = 0.1; inp.value = f.valores[k];
+      inp.inputMode = 'decimal';
+      inp.oninput = () => {
+        const v = Math.min(500, Math.max(0.1, Math.round((parseFloat(inp.value) || 0.1) * 100) / 100));
+        f.valores[k] = v; pintarResultado(i); refrescarQR();
+      };
+      inp.onblur = () => { inp.value = f.valores[k]; pintar(); };
       fila2.appendChild(sp); fila2.appendChild(inp);
     });
     col.appendChild(fila2);
@@ -257,6 +286,16 @@ function pintar(){
   });
   $('#cupo').textContent = figuras.length + ' de ' + MAX_FIGURAS + ' figuras';
   $('#btnAgregar').disabled = figuras.length >= MAX_FIGURAS;
+}
+
+/* refresca los números de una fila sin redibujar la lista (no pierde el foco) */
+function pintarResultado(i){
+  const fila = document.querySelectorAll('#figuras .fig')[i];
+  if(!fila) return;
+  const f = figuras[i], r = CUERPOS[f.cuerpo].calc(dimsFigura(f));
+  fila.querySelector('.res').innerHTML =
+    'V = ' + nf(r.vo.v) + ' cm³ &nbsp; A<sub>T</sub> = ' + nf(r.at.v) + ' cm²';
+  if(visorFigura === i) pintarVisor();
 }
 
 function refrescarQR(){
@@ -326,6 +365,70 @@ $('#btnImprimir').onclick = () => {
 
   $('#impresion').innerHTML = html;
   setTimeout(() => window.print(), 200);
+};
+
+/* ---------------- visor 3D de la figura ---------------- */
+let visorFigura = -1, vRend = null, vEsc = null, vCam = null, vRaiz = null, vGrupo = null, vPiv = [], vT = 1;
+function iniciarVisor(){
+  if(vRend) return;
+  vRend = new THREE.WebGLRenderer({antialias:true, alpha:true});
+  vRend.setPixelRatio(Math.min(devicePixelRatio,2));
+  document.getElementById('vLienzo').appendChild(vRend.domElement);
+  vRend.domElement.style.cssText = 'width:100%;height:100%;display:block';
+  vEsc = new THREE.Scene();
+  vEsc.add(new THREE.HemisphereLight(0xffffff, 0x2c4a3c, 1.2));
+  const l = new THREE.DirectionalLight(0xffffff, .9); l.position.set(3,6,4); vEsc.add(l);
+  vCam = new THREE.PerspectiveCamera(45, 4/3, .01, 1000);
+  vRaiz = new THREE.Group(); vEsc.add(vRaiz);
+  (function anima(){
+    requestAnimationFrame(anima);
+    if(visorFigura < 0) return;
+    const c = document.getElementById('vLienzo').getBoundingClientRect();
+    if(c.width < 5) return;
+    vRend.setSize(c.width, c.height, false);
+    vCam.aspect = c.width/c.height; vCam.updateProjectionMatrix();
+    vCam.position.set(0, 1.35, 3.4); vCam.lookAt(0, .5, 0);
+    vRaiz.rotation.y += 0.006;
+    vRend.render(vEsc, vCam);
+  })();
+}
+function pintarVisor(){
+  const f = figuras[visorFigura], def = CUERPOS[f.cuerpo], dims = dimsFigura(f), r = def.calc(dims);
+  if(vGrupo) vRaiz.remove(vGrupo);
+  vGrupo = construirRed(def.red(dims));
+  vPiv = vGrupo.userData.pivotes;
+  vGrupo.scale.setScalar(1.25 / Math.max(...Object.values(dims), 6));
+  vRaiz.add(vGrupo);
+  aplicarVisor();
+  document.getElementById('vNombre').textContent = def.nombre;
+  document.getElementById('vMedidas').textContent = textoMedidas(f);
+  document.getElementById('vDatos').innerHTML =
+    'Área lateral: ' + r.al.f + ' = <b>' + nf(r.al.v) + ' cm²</b><br>' +
+    'Área total: '   + r.at.f + ' = <b>' + nf(r.at.v) + ' cm²</b><br>' +
+    'Volumen: '      + r.vo.f + ' = <b>' + nf(r.vo.v) + ' cm³</b>' +
+    (r.extra ? '<br>' + r.extra : '');
+}
+function aplicarVisor(){
+  for(const p of vPiv) p.rotation.x = -p.userData.pliegue * vT;
+  vGrupo.scale.setScalar((1.25 / Math.max(...Object.values(dimsFigura(figuras[visorFigura])), 6)) /
+                         (1 + (1-vT)*0.95));
+}
+function abrirVisor(i){
+  iniciarVisor();
+  visorFigura = i; vT = 1;
+  document.getElementById('vDes').value = 0;
+  document.getElementById('vDesTxt').textContent = 'armado';
+  document.getElementById('visor').style.display = 'flex';
+  pintarVisor();
+}
+document.getElementById('vCerrar').onclick = () => {
+  document.getElementById('visor').style.display = 'none'; visorFigura = -1;
+};
+document.getElementById('visor').onclick = e => { if(e.target.id === 'visor') document.getElementById('vCerrar').click(); };
+document.getElementById('vDes').oninput = e => {
+  vT = 1 - e.target.value/100; aplicarVisor();
+  document.getElementById('vDesTxt').textContent =
+    e.target.value == 0 ? 'armado' : (e.target.value == 100 ? 'red plana' : e.target.value + '%');
 };
 
 pintar(); refrescarQR();

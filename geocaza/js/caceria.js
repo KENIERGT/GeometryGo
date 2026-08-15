@@ -74,11 +74,87 @@ function calor(m){
   return             {t:'Frío',          c:'#5b7fa6', n:0};
 }
 
-/* respuesta correcta con tolerancia (el redondeo del estudiante es válido) */
-function esCorrecta(respuesta, valor){
-  if(isNaN(respuesta)) return false;
-  const tol = Math.max(Math.abs(valor) * 0.01, 0.5);
-  return Math.abs(respuesta - valor) <= tol;
+/* ---------------------------------------------------------------------
+   Opciones de respuesta
+   ---------------------------------------------------------------------
+   Los distractores no son números al azar: cada uno corresponde a un
+   error típico documentado (confundir área con volumen, olvidar dividir
+   entre 3, usar el diámetro por el radio, usar la altura del cuerpo en
+   lugar de la apotema o la generatriz, dejar fuera las bases).
+   Así, la opción que marca el estudiante dice *qué* entendió mal.
+   --------------------------------------------------------------------- */
+function distractores(f, tipo){
+  const d = dimsFigura(f), r = CUERPOS[f.cuerpo].calc(d), P = Math.PI;
+  const V = r.vo.v, AT = r.at.v, AL = r.al.v;
+  switch(f.cuerpo + ':' + tipo){
+    case 'cubo:vol':      return [{v:AT, e:'confunde volumen con área total'},
+                                  {v:d.a*d.a, e:'área de una sola cara'},
+                                  {v:12*d.a, e:'suma de las aristas'}];
+    case 'cubo:are':      return [{v:V,  e:'confunde área con volumen'},
+                                  {v:4*d.a*d.a, e:'olvida las dos bases'},
+                                  {v:d.a*d.a, e:'una sola cara'}];
+    case 'prisma:vol':    return [{v:AT, e:'confunde volumen con área total'},
+                                  {v:d.a*d.b, e:'solo el área de la base'},
+                                  {v:2*(d.a+d.b+d.h), e:'suma de dimensiones'}];
+    case 'prisma:are':    return [{v:AL, e:'olvida las dos bases'},
+                                  {v:AL + d.a*d.b, e:'cuenta una sola base'},
+                                  {v:V,  e:'confunde área con volumen'}];
+    case 'piramide:vol':  return [{v:d.a*d.a*d.h, e:'olvida dividir entre 3'},
+                                  {v:d.a*d.a*Math.sqrt(d.h*d.h + (d.a/2)*(d.a/2))/3, e:'usa la apotema como altura'},
+                                  {v:AT, e:'confunde volumen con área total'}];
+    case 'piramide:are':  return [{v:AL, e:'olvida la base'},
+                                  {v:d.a*d.a + 2*d.a*d.h, e:'usa la altura del cuerpo en vez de la apotema'},
+                                  {v:V,  e:'confunde área con volumen'}];
+    case 'cilindro:vol':  return [{v:P*(2*d.r)*(2*d.r)*d.h, e:'usa el diámetro en vez del radio'},
+                                  {v:AL, e:'confunde volumen con área lateral'},
+                                  {v:AT, e:'confunde volumen con área total'}];
+    case 'cilindro:are':  return [{v:AL, e:'olvida las dos bases'},
+                                  {v:AL + P*d.r*d.r, e:'cuenta una sola base'},
+                                  {v:V,  e:'confunde área con volumen'}];
+    case 'cono:vol':      return [{v:P*d.r*d.r*d.h, e:'olvida dividir entre 3'},
+                                  {v:P*d.r*d.r*Math.sqrt(d.r*d.r+d.h*d.h)/3, e:'usa la generatriz como altura'},
+                                  {v:AL, e:'confunde volumen con área lateral'}];
+    case 'cono:are':      return [{v:AL, e:'olvida la base'},
+                                  {v:P*d.r*d.h + P*d.r*d.r, e:'usa la altura en vez de la generatriz'},
+                                  {v:V,  e:'confunde área con volumen'}];
+  }
+  return [];
+}
+
+/* barajado reproducible: las opciones no cambian de lugar al redibujar */
+function barajar(lista, semilla){
+  let s = (semilla*9301 + 49297) % 233280;
+  const a = lista.slice();
+  for(let i = a.length-1; i > 0; i--){
+    s = (s*9301 + 49297) % 233280;
+    const j = Math.floor(s/233280 * (i+1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* 4 opciones: la correcta y 3 distractores distintos entre sí */
+function opcionesReto(f, indice, tipo){
+  const r = CUERPOS[f.cuerpo].calc(dimsFigura(f));
+  const correcto = tipo === 'vol' ? r.vo.v : r.at.v;
+  const red = v => Math.round(v*100)/100;
+  const usados = [red(correcto)];
+  const ops = [{ v: red(correcto), correcta: true, e: '' }];
+  for(const d of distractores(f, tipo)){
+    const v = red(d.v);
+    if(v <= 0 || usados.some(u => Math.abs(u - v) < Math.max(0.05, correcto*0.005))) continue;
+    usados.push(v); ops.push({ v, correcta:false, e:d.e });
+    if(ops.length === 4) break;
+  }
+  // si algún distractor coincidía con la respuesta, se rellena desplazando
+  let k = 1;
+  while(ops.length < 4){
+    const v = red(correcto * (1 + 0.25*k) + k);
+    if(!usados.some(u => Math.abs(u - v) < 0.05)){ usados.push(v); ops.push({v, correcta:false, e:'valor sin procedimiento'}); }
+    k++;
+    if(k > 12) break;
+  }
+  return barajar(ops, indice*17 + (tipo === 'vol' ? 3 : 11));
 }
 
 /* cacería de ejemplo, para que la app funcione recién instalada */
